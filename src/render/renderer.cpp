@@ -1,18 +1,13 @@
 #include "renderer.h"
 #include <algorithm>
-#include <algorithm> // std::fill
-#include <cmath>
 #include <functional>
-#include <glm/common.hpp>
 #include <glm/gtx/component_wise.hpp>
-#include <iostream>
 #include <tbb/blocked_range2d.h>
 #include <tbb/parallel_for.h>
-#include <tuple>
 
 namespace render {
 
-// The renderer is passed a pointer to the volume, gradinet volume, camera and an initial renderConfig.
+// The renderer is passed a pointer to the volume, gradient volume, camera and an initial renderConfig.
 // The camera being pointed to may change each frame (when the user interacts). When the renderConfig
 // changes the setConfig function is called with the updated render config. This gives the Renderer an
 // opportunity to resize the framebuffer.
@@ -84,7 +79,7 @@ void Renderer::render()
 #else
     // Parallel for loop (in 2 dimensions) that subdivides the screen into tiles.
     const tbb::blocked_range2d<int> screenRange { 0, m_config.renderResolution.y, 0, m_config.renderResolution.x };
-        tbb::parallel_for(screenRange, [&](tbb::blocked_range2d<int> localRange) {
+    tbb::parallel_for(screenRange, [&](tbb::blocked_range2d<int> localRange) {
         // Loop over the pixels in a tile. This function is called on multiple threads at the same time.
         for (int y = std::begin(localRange.rows()); y != std::end(localRange.rows()); y++) {
             for (int x = std::begin(localRange.cols()); x != std::end(localRange.cols()); x++) {
@@ -95,7 +90,7 @@ void Renderer::render()
 
             // Compute where the ray enters and exists the volume.
             // If the ray misses the volume then we continue to the next pixel.
-            if (!instersectRayVolumeBounds(ray, bounds))
+            if (!intersectRayVolumeBounds(ray, bounds))
                 continue;
 
             // Get a color for the current pixel according to the current render mode.
@@ -121,7 +116,7 @@ void Renderer::render()
                 color = traceRayTF2D(ray, sampleStep);
                 break;
             }
-            };
+            }
             // Write the resulting color to the screen.
             fillColor(x, y, color);
 
@@ -148,14 +143,14 @@ glm::vec4 Renderer::traceRaySlice(const Ray& ray, const glm::vec3& volumeCenter,
 
 // ======= DO NOT MODIFY THIS FUNCTION ========
 // Function that implements maximum-intensity-projection (MIP) raycasting.
-// It returns the color assigned to a ray/pixel given it's origin, direction and the distances
+// It returns the color assigned to a ray/pixel given its origin, direction and the distances
 // at which it enters/exits the volume (ray.tmin & ray.tmax respectively).
 // The ray must be sampled with a distance defined by the sampleStep
 glm::vec4 Renderer::traceRayMIP(const Ray& ray, float sampleStep) const
 {
     float maxVal = 0.0f;
 
-    // Incrementing samplePos directly instead of recomputing it each frame gives a measureable speed-up.
+    // Incrementing samplePos directly instead of recomputing it each frame gives a measurable speed-up.
     glm::vec3 samplePos = ray.origin + ray.tmin * ray.direction;
     const glm::vec3 increment = sampleStep * ray.direction;
     for (float t = ray.tmin; t <= ray.tmax; t += sampleStep, samplePos += increment) {
@@ -182,7 +177,7 @@ glm::vec4 Renderer::traceRayISO(const Ray& ray, float sampleStep) const
 // ======= TODO: IMPLEMENT ========
 // Given that the iso value lies somewhere between t0 and t1, find a t for which the value
 // closely matches the iso value (less than 0.01 difference). Add a limit to the number of
-// iterations such that it does not get stuck in degerate cases.
+// iterations such that it does not get stuck in degenerate cases.
 float Renderer::bisectionAccuracy(const Ray& ray, float t0, float t1, float isoValue) const
 {
     return 0.0f;
@@ -209,7 +204,7 @@ glm::vec4 Renderer::traceRayComposite(const Ray& ray, float sampleStep) const
 }
 
 // ======= DO NOT MODIFY THIS FUNCTION ========
-// Looks up the color+opacity corresponding to the given volume value from the 1D tranfer function LUT (m_config.tfColorMap).
+// Looks up the color+opacity corresponding to the given volume value from the 1D transfer function LUT (m_config.tfColorMap).
 // The value will initially range from (m_config.tfColorMapIndexStart) to (m_config.tfColorMapIndexStart + m_config.tfColorMapIndexRange) .
 glm::vec4 Renderer::getTFValue(float val) const
 {
@@ -241,11 +236,11 @@ float Renderer::getTF2DOpacity(float intensity, float gradientMagnitude) const
 
 // This function computes if a ray intersects with the axis-aligned bounding box around the volume.
 // If the ray intersects then tmin/tmax are set to the distance at which the ray hits/exists the
-// volume and true is returned. If the ray misses the volume the the function returns false.
+// volume and true is returned. If the ray misses the volume the function returns false.
 //
 // If you are interested you can learn about it at.
 // https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-box-intersection
-bool Renderer::instersectRayVolumeBounds(Ray& ray, const Bounds& bounds) const
+bool Renderer::intersectRayVolumeBounds(Ray& ray, const Bounds& bounds) const
 {
     const glm::vec3 invDir = 1.0f / ray.direction;
     const glm::bvec3 sign = glm::lessThan(invDir, glm::vec3(0.0f));

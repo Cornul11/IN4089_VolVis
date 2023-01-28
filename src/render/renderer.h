@@ -55,7 +55,7 @@ private:
     glm::vec4 getTFValue(float val) const;
     float getTF2DOpacity(float val, float gradientMagnitude) const;
 
-    bool instersectRayVolumeBounds(Ray& ray, const Bounds& volumeBounds) const;
+    bool intersectRayVolumeBounds(Ray& ray, const Bounds& bounds) const;
     void fillColor(int x, int y, const glm::vec4& color);
 
 protected:

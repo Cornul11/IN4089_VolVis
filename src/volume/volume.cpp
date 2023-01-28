@@ -77,6 +77,8 @@ std::string_view Volume::fileName() const
 float Volume::getVoxel(int x, int y, int z) const
 {
     const size_t i = size_t(x + m_dim.x * (y + m_dim.y * z));
+    if (i > m_data.size() - 1) // avoiding going out of bounds
+        return 1.0f;
     return static_cast<float>(m_data[i]);
 }
 
@@ -116,48 +118,27 @@ float Volume::getSampleNearestNeighbourInterpolation(const glm::vec3& coord) con
     return getVoxel(roundToPositiveInt(coord.x), roundToPositiveInt(coord.y), roundToPositiveInt(coord.z));
 }
 
-// ======= TODO : IMPLEMENT the functions below for tri-linear interpolation ========
 // ======= Consider using the linearInterpolate and biLinearInterpolate functions ===
 // This function returns the trilinear interpolated value at the continuous 3D position given by coord.
 float Volume::getSampleTriLinearInterpolation(const glm::vec3& coord) const
 {
-    if (coord.x < 0 || coord.x > dims().x -1 || coord.y < 0 || coord.y > dims().y -1 || coord.z < 0 || coord.z > dims().z -1-1)
-    {
-        std::cout << "Error: coord is out of the grid" << std::endl;
+    // check if the coordinate is within volume boundaries, since we only look at direct neighbours we only need to check within 0.5
+    if (glm::any(glm::lessThan(coord + 0.5f, glm::vec3(0))) || glm::any(glm::greaterThanEqual(coord + 0.5f, glm::vec3(m_dim))))
         return 0.0f;
-    }
 
-    // Convert continuous to integer voxel coordinates
-    int x = floor(coord.x);
-    int y = floor(coord.y);
-    int z = floor(coord.z);
+    // computes all cXXX where X is either 0 or 1 then interpolates into c0 or c1 based on Z
+    float c0 = biLinearInterpolate({ coord.x, coord.y }, coord.z);
+    float c1 = biLinearInterpolate({ coord.x, coord.y }, coord.z + 1);
 
-    // Get the 8 surrounding voxel values
-    float v000 = getVoxel(x, y, z);
-    float v001 = getVoxel(x, y, z+1);
-    float v010 = getVoxel(x, y+1, z);
-    float v011 = getVoxel(x, y+1, z+1);
-    float v100 = getVoxel(x+1, y, z);
-    float v101 = getVoxel(x+1, y, z+1);
-    float v110 = getVoxel(x+1, y+1, z);
-    float v111 = getVoxel(x+1, y+1, z+1);
-
-    // Perform bi-linear interpolation in xy, yz and zx plane
-    glm::vec2 xyCoord = glm::vec2(coord.x - x, coord.y - y);
-    float xy = biLinearInterpolate(xyCoord, z);
-    xyCoord = glm::vec2(coord.y - y, coord.z - z);
-    float yz = biLinearInterpolate(xyCoord, x);
-    xyCoord = glm::vec2(coord.z - z, coord.x - x);
-    float zx = biLinearInterpolate(xyCoord, y);
-
-    // Perform final linear interpolation
-    return linearInterpolate(zx, yz, coord.x - x);
+    // Perform linear interpolation in Z
+    return linearInterpolate(c0, c1, coord.z - floor(coord.z));
 }
 
-// This function linearly interpolates the value at X using incoming values g0 and g1 given a factor (equal to the positon of x in 1D)
+// This function linearly interpolates the value at X using incoming values g0 and g1 given a factor (equal to the position of x in 1D)
 //
 // g0--X--------g1
 //   factor
+// AKA lerp in GLSL
 float Volume::linearInterpolate(float g0, float g1, float factor)
 {
     return g0 + (g1 - g0) * factor;
@@ -171,19 +152,18 @@ float Volume::biLinearInterpolate(const glm::vec2& xyCoord, int z) const
     int y = floor(xyCoord.y);
 
     // Get the surrounding voxel values
-    float v00 = getVoxel(x, y, z);
-    float v01 = getVoxel(x, y+1, z);
-    float v10 = getVoxel(x+1, y, z);
-    float v11 = getVoxel(x+1, y+1, z);
+    float q11 = getVoxel(x, y, z);
+    float q12 = getVoxel(x, y + 1, z);
+    float q21 = getVoxel(x + 1, y, z);
+    float q22 = getVoxel(x + 1, y + 1, z);
 
     // Perform linear interpolation in x and y
-    float xy = linearInterpolate(v00, v10, xyCoord.x - x);
-    float yx = linearInterpolate(v01, v11, xyCoord.x - x);
+    float r1 = linearInterpolate(q11, q21, xyCoord.x - x);
+    float r2 = linearInterpolate(q12, q22, xyCoord.x - x);
 
     // Perform final linear interpolation
-    return linearInterpolate(xy, yx, xyCoord.y - y);
+    return linearInterpolate(r1, r2, xyCoord.y - y);
 }
-
 
 // ======= OPTIONAL : This functions can be used to implement cubic interpolation ========
 // This function represents the h(x) function, which returns the weight of the cubic interpolation kernel for a given position x
@@ -213,7 +193,7 @@ float Volume::getSampleTriCubicInterpolation(const glm::vec3& coord) const
     return 0.0f;
 }
 
-// Load an fld volume data file
+// Load an FLD volume data file
 // First read and parse the header, then the volume data can be directly converted from bytes to uint16_ts
 void Volume::loadFile(const std::filesystem::path& file)
 {
