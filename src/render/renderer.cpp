@@ -162,28 +162,81 @@ glm::vec4 Renderer::traceRayMIP(const Ray& ray, float sampleStep) const
     return glm::vec4(glm::vec3(maxVal) / m_pVolume->maximum(), 1.0f);
 }
 
-// ======= TODO: IMPLEMENT ========
 // This function should find the position where the ray intersects with the volume's isosurface.
 // If volume shading is DISABLED then simply return the isoColor.
 // If volume shading is ENABLED then return the phong-shaded color at that location using the local gradient (from m_pGradientVolume).
 //   Use the camera position (m_pCamera->position()) as the light position.
-// Use the bisectionAccuracy function (to be implemented) to get a more precise isosurface location between two steps.
+// Use the bisectionAccuracy function to get a more precise isosurface location between two steps.
 glm::vec4 Renderer::traceRayISO(const Ray& ray, float sampleStep) const
 {
     static constexpr glm::vec3 isoColor { 0.8f, 0.8f, 0.2f };
-    return glm::vec4(isoColor, 1.0f);
+    static constexpr glm::vec3 noIntersectionColor { 0.0f, 0.0f, 0.0f };
+
+    glm::vec3 finalPixelColor = noIntersectionColor;
+
+    float lastIterationT = std::numeric_limits<float>::lowest();
+    float isoValue = m_config.isoValue;
+
+    // Incrementing samplePos directly instead of recomputing it each frame gives a measurable speed-up.
+    glm::vec3 samplePos = ray.origin + ray.tmin * ray.direction;
+    const glm::vec3 increment = sampleStep * ray.direction;
+    for (float t = ray.tmin; t <= ray.tmax; t += sampleStep, samplePos += increment) {
+        const float val = m_pVolume->getSampleInterpolate(samplePos);
+
+        if (val > isoValue) {
+            float accurateT = bisectionAccuracy(ray, lastIterationT, t, isoValue);
+
+            if (m_config.volumeShading) {
+                finalPixelColor = computePhongShading(isoColor,
+                    m_pGradientVolume->getGradientInterpolate(ray.origin + accurateT * ray.direction),
+                    m_pCamera->position(),
+                    m_pCamera->position());
+            } else {
+                finalPixelColor = isoColor;
+            }
+            break;
+        }
+        lastIterationT = t;
+    }
+
+    return glm::vec4(finalPixelColor, 1.0f);
 }
 
-// ======= TODO: IMPLEMENT ========
 // Given that the iso value lies somewhere between t0 and t1, find a t for which the value
 // closely matches the iso value (less than 0.01 difference). Add a limit to the number of
 // iterations such that it does not get stuck in degenerate cases.
 float Renderer::bisectionAccuracy(const Ray& ray, float t0, float t1, float isoValue) const
 {
-    return 0.0f;
+    static const float difference = 0.01f;
+    float t = (t0 + t1) / 2;
+    float t_previous;
+    int iteration = 0;
+    int max_iterations = 100;
+    float value;
+
+    while (iteration < max_iterations) {
+        glm::vec3 samplePos = ray.origin + t * ray.direction;
+        value = m_pVolume->getSampleInterpolate(samplePos);
+
+        if (glm::abs(value - isoValue) < difference) {
+            return t;
+        } else if (value < isoValue) {
+            t0 = t;
+        } else {
+            t1 = t;
+        }
+
+        t_previous = t;
+        t = (t0 + t1) / 2;
+        if (t == t_previous) {
+            return t;
+        }
+
+        iteration++;
+    }
+    return t;
 }
 
-// ======= TODO: IMPLEMENT ========
 // Compute Phong Shading given the voxel color (material color), the gradient, the light vector and view vector.
 // You can find out more about the Phong shading model at:
 // https://en.wikipedia.org/wiki/Phong_reflection_model
@@ -192,7 +245,26 @@ float Renderer::bisectionAccuracy(const Ray& ray, float t0, float t1, float isoV
 // You are free to choose any specular power that you'd like.
 glm::vec3 Renderer::computePhongShading(const glm::vec3& color, const volume::GradientVoxel& gradient, const glm::vec3& L, const glm::vec3& V)
 {
-    return glm::vec3(0.0f);
+    static constexpr float kA = 0.1f;
+    static constexpr float kD = 0.7f;
+    static constexpr float kS = 0.2f;
+    static constexpr int alpha = 2.0;
+
+    static constexpr glm::vec3 IA = glm::vec3(1.0f);
+    static constexpr glm::vec3 ID = glm::vec3(1.0f);
+    static constexpr glm::vec3 IS = glm::vec3(1.0f);
+
+    glm::vec3 Nn = glm::normalize(gradient.dir);
+    glm::vec3 Ln = glm::normalize(L);
+    glm::vec3 Vn = glm::normalize(V);
+
+    glm::vec3 Rn = glm::normalize(glm::reflect(-Ln, Nn));
+
+    glm::vec3 ambient = IA * kA * color;
+    glm::vec3 diffuse = ID * kD * glm::max(0.0f, glm::dot(Ln, Vn)) * color;
+    glm::vec3 specular = IS * kS * static_cast<float>(glm::pow(glm::max(0.0f, glm::dot(Rn, Vn)), alpha)) * color;
+
+    return ambient + diffuse + specular;
 }
 
 // ======= TODO: IMPLEMENT ========

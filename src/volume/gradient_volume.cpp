@@ -86,10 +86,6 @@ GradientVoxel GradientVolume::getGradientInterpolate(const glm::vec3& coord) con
     case InterpolationMode::Linear: {
         return getGradientLinearInterpolate(coord);
     }
-    case InterpolationMode::Cubic: {
-        // No cubic in this case, linear is good enough for the gradient.
-        return getGradientLinearInterpolate(coord);
-    }
     default: {
         throw std::exception();
     }
@@ -110,20 +106,36 @@ GradientVoxel GradientVolume::getGradientNearestNeighbor(const glm::vec3& coord)
     return getGradient(roundToPositiveInt(coord.x), roundToPositiveInt(coord.y), roundToPositiveInt(coord.z));
 }
 
-// ======= TODO : IMPLEMENT ========
-// Returns the trilinearly interpolated gradinet at the given coordinate.
+// Returns the trilinearly interpolated gradient at the given coordinate.
 // Use the linearInterpolate function that you implemented below.
 GradientVoxel GradientVolume::getGradientLinearInterpolate(const glm::vec3& coord) const
 {
-    return GradientVoxel {};
+    int x = floor(coord.x);
+    int y = floor(coord.y);
+    int z = floor(coord.z);
+
+    // Get the surrounding voxel values
+    GradientVoxel q11 = getGradient(x, y, z);
+    GradientVoxel q12 = getGradient(x, y + 1, z);
+    GradientVoxel q21 = getGradient(x + 1, y, z);
+    GradientVoxel q22 = getGradient(x + 1, y + 1, z);
+
+    // Perform linear interpolation in x and y
+    GradientVoxel r1 = linearInterpolate(q11, q21, coord.x - x);
+    GradientVoxel r2 = linearInterpolate(q12, q22, coord.x - x);
+
+    // Perform final linear interpolation
+    return linearInterpolate(r1, r2, coord.y - y);
 }
 
-// ======= TODO : IMPLEMENT ========
-// This function should linearly interpolates the value from g0 to g1 given the factor (t).
+// This function should linearly interpolate the value from g0 to g1 given the factor (t).
 // At t=0, linearInterpolate should return g0 and at t=1 it returns g1.
 GradientVoxel GradientVolume::linearInterpolate(const GradientVoxel& g0, const GradientVoxel& g1, float factor)
 {
-    return GradientVoxel {};
+    GradientVoxel result{};
+    result.dir = glm::mix(g0.dir, g1.dir, factor);
+    result.magnitude = glm::mix(g0.magnitude, g1.magnitude, factor);
+    return result;
 }
 
 // This function returns a gradientVoxel without using interpolation

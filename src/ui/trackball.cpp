@@ -91,7 +91,7 @@ glm::vec3 Trackball::forward() const
     return m_rotation * glm::vec3(0, 0, 1);
 }
 
-// This function generates a ray with its origin at cameraPos, going through pixel pixel on the virtual screen
+// This function generates a ray with its origin at cameraPos, going through pixel on the virtual screen
 render::Ray Trackball::generateRay(const glm::vec2& pixel) const
 {
     const float halfScreenPlaceHeight = std::tan(m_fovy / 2.0f);
