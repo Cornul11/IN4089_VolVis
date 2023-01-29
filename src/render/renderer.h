@@ -65,6 +65,7 @@ protected:
     RenderConfig m_config;
 
     std::vector<glm::vec4> m_frameBuffer;
+    void updateRayOpacity(const glm::vec4& sampleOpacity, glm::vec3& accumulatedOpacity, float& opacity) const;
 };
 
 }

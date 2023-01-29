@@ -84,48 +84,48 @@ void Renderer::render()
         for (int y = std::begin(localRange.rows()); y != std::end(localRange.rows()); y++) {
             for (int x = std::begin(localRange.cols()); x != std::end(localRange.cols()); x++) {
 #endif
-            // Compute a ray for the current pixel.
-            const glm::vec2 pixelPos = glm::vec2(x, y) / glm::vec2(m_config.renderResolution);
-            Ray ray = m_pCamera->generateRay(pixelPos * 2.0f - 1.0f);
+                // Compute a ray for the current pixel.
+                const glm::vec2 pixelPos = glm::vec2(x, y) / glm::vec2(m_config.renderResolution);
+                Ray ray = m_pCamera->generateRay(pixelPos * 2.0f - 1.0f);
 
-            // Compute where the ray enters and exists the volume.
-            // If the ray misses the volume then we continue to the next pixel.
-            if (!intersectRayVolumeBounds(ray, bounds))
-                continue;
+                // Compute where the ray enters and exists the volume.
+                // If the ray misses the volume then we continue to the next pixel.
+                if (!intersectRayVolumeBounds(ray, bounds))
+                    continue;
 
-            // Get a color for the current pixel according to the current render mode.
-            glm::vec4 color {};
-            switch (m_config.renderMode) {
-            case RenderMode::RenderSlicer: {
-                color = traceRaySlice(ray, volumeCenter, planeNormal);
-                break;
-            }
-            case RenderMode::RenderMIP: {
-                color = traceRayMIP(ray, sampleStep);
-                break;
-            }
-            case RenderMode::RenderComposite: {
-                color = traceRayComposite(ray, sampleStep);
-                break;
-            }
-            case RenderMode::RenderIso: {
-                color = traceRayISO(ray, sampleStep);
-                break;
-            }
-            case RenderMode::RenderTF2D: {
-                color = traceRayTF2D(ray, sampleStep);
-                break;
-            }
-            }
-            // Write the resulting color to the screen.
-            fillColor(x, y, color);
+                // Get a color for the current pixel according to the current render mode.
+                glm::vec4 color {};
+                switch (m_config.renderMode) {
+                case RenderMode::RenderSlicer: {
+                    color = traceRaySlice(ray, volumeCenter, planeNormal);
+                    break;
+                }
+                case RenderMode::RenderMIP: {
+                    color = traceRayMIP(ray, sampleStep);
+                    break;
+                }
+                case RenderMode::RenderComposite: {
+                    color = traceRayComposite(ray, sampleStep);
+                    break;
+                }
+                case RenderMode::RenderIso: {
+                    color = traceRayISO(ray, sampleStep);
+                    break;
+                }
+                case RenderMode::RenderTF2D: {
+                    color = traceRayTF2D(ray, sampleStep);
+                    break;
+                }
+                }
+                // Write the resulting color to the screen.
+                fillColor(x, y, color);
 
 #if PARALLELISM == 1
-        }
-    }
-});
-#else
             }
+        }
+    });
+#else
+    }
         }
 #endif
 }
@@ -267,12 +267,41 @@ glm::vec3 Renderer::computePhongShading(const glm::vec3& color, const volume::Gr
     return ambient + diffuse + specular;
 }
 
-// ======= TODO: IMPLEMENT ========
 // In this function, implement 1D transfer function raycasting.
 // Use getTFValue to compute the color for a given volume value according to the 1D transfer function.
 glm::vec4 Renderer::traceRayComposite(const Ray& ray, float sampleStep) const
 {
-    return glm::vec4(0.0f);
+    const glm::vec3 increment = sampleStep * ray.direction;
+    glm::vec3 accumulatedOpacity(0.0f);
+    glm::vec3 samplePos = ray.origin + ray.tmin * ray.direction;
+    float opacity = 0.0f;
+
+    // loops until the ray is at infinite or the opacity has reached its maximum
+    for (float t = ray.tmin; t <= ray.tmax && opacity < 1.0f; t += sampleStep, samplePos += increment) {
+        float intensity = m_pVolume->getSampleInterpolate(samplePos);
+        glm::vec4 sampleOpacity = getTFValue(intensity);
+
+        updateRayOpacity(sampleOpacity, accumulatedOpacity, opacity);
+    }
+
+    if (m_config.volumeShading) {
+        accumulatedOpacity *= computePhongShading(
+            accumulatedOpacity,
+            m_pGradientVolume->getGradientInterpolate(samplePos),
+            m_pCamera->position(),
+            m_pCamera->position());
+    }
+    return glm::vec4(accumulatedOpacity, opacity);
+}
+
+// This function takes the accumulated opacity, the current ray position opacity and updates all the
+// color channels and the opacity itself
+void Renderer::updateRayOpacity(const glm::vec4& sampleOpacity, glm::vec3& accumulatedOpacity, float& opacity) const
+{
+    accumulatedOpacity.r = accumulatedOpacity.r + (1.0f - opacity) * sampleOpacity.a * sampleOpacity.r;
+    accumulatedOpacity.g = accumulatedOpacity.g + (1.0f - opacity) * sampleOpacity.a * sampleOpacity.g;
+    accumulatedOpacity.b = accumulatedOpacity.b + (1.0f - opacity) * sampleOpacity.a * sampleOpacity.b;
+    opacity = opacity + (1.0f - opacity) * sampleOpacity.a;
 }
 
 // ======= DO NOT MODIFY THIS FUNCTION ========
