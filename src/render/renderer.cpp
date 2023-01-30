@@ -141,8 +141,6 @@ glm::vec3 Renderer::computeShading(const glm::vec3& color, const volume::Gradien
     case ShadingMode::Technical: {
         return computeTechnicalShading(gradient, L, V);
     }
-    case ShadingMode::Normal:
-        return computeNormalShading(gradient, L, V, samplePos);
     default: {
         throw std::exception();
     }
@@ -289,22 +287,31 @@ glm::vec3 Renderer::computePhongShading(const glm::vec3& color, const volume::Gr
     return ambient + diffuse + specular;
 }
 
+// Computes an approximation of a technical illustration given the voxel the gradient, the light vector and the view vector
+// as per Gooch, B. Gooch, P. Shirley, and E. Cohen, “A non-photorealistic lighting model for automatic technical illustration”
+// pp. 447–452, 1998.
 glm::vec3 Renderer::computeTechnicalShading(const volume::GradientVoxel& gradient, const glm::vec3& L, const glm::vec3& V) const
 {
-    float beta = m_config.beta;
-    float alpha = m_config.alpha;
-    float b = m_config.b;
-    float y = m_config.y;
-    glm::vec3 kBlue = glm::vec3(0, 0, b);
-    glm::vec3 kYellow = glm::vec3(y, y, 0);
-    float diffuse = glm::dot(glm::normalize(gradient.dir), glm::normalize(L));
-    diffuse = (diffuse * 0.5f + 0.5f) * 1.0f;
-    float kD = 1.0f;
-    glm::vec3 kCool = kBlue + alpha * kD;
-    glm::vec3 kWarm = kYellow + beta * kD;
-    glm::vec3 diff = glm::vec3(1.0f) * (diffuse * kWarm + (1 - diffuse) * kCool);
-    glm::vec3 specular = glm::vec3(1.0f) * glm::pow(glm::max(0.0f, glm::dot(glm::normalize(gradient.dir), glm::normalize(L + V))), alpha);
-    glm::vec3 finalColor = diff + specular;
+    const float beta = m_config.beta;
+    const float alpha = m_config.alpha;
+    const float b = m_config.b;
+    const float y = m_config.y;
+    const glm::vec3 kBlue(0, 0, b);
+    const glm::vec3 kYellow(y, y, 0);
+    const float kD = 1.0f;
+
+    const float diffuse = glm::dot(glm::normalize(gradient.dir), glm::normalize(L));
+    const float diffuseFactor = (diffuse * 0.5f + 0.5f) * 1.0f;
+
+    const glm::vec3 kCool = kBlue + alpha * kD;
+    const glm::vec3 kWarm = kYellow + beta * kD;
+    const glm::vec3 diff = glm::vec3(1.0f) * (diffuseFactor * kWarm + (1 - diffuseFactor) * kCool);
+
+    const float specularFactor = glm::pow(glm::max(0.0f, glm::dot(glm::normalize(gradient.dir), glm::normalize(L + V))), alpha);
+    const glm::vec3 specular = glm::vec3(1.0f) * specularFactor;
+
+    const glm::vec3 finalColor = diff + specular;
+
     return finalColor;
 }
 
