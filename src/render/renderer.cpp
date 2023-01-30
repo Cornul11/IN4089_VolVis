@@ -315,15 +315,44 @@ glm::vec4 Renderer::getTFValue(float val) const
     return m_config.tfColorMap[i];
 }
 
-// ======= TODO: IMPLEMENT ========
 // In this function, implement 2D transfer function raycasting.
 // Use the getTF2DOpacity function that you implemented to compute the opacity according to the 2D transfer function.
 glm::vec4 Renderer::traceRayTF2D(const Ray& ray, float sampleStep) const
 {
-    return glm::vec4(0.0f);
+    const glm::vec3 increment = sampleStep * ray.direction;
+    glm::vec3 accumulatedOpacity(0.0f);
+    glm::vec3 samplePos = ray.origin + ray.tmin * ray.direction;
+    float opacity = 0.0f;
+
+    // loops until the ray is at infinite or the opacity has reached its maximum
+    // front-to-back compositing as per slide 81, Lecture 06
+    for (float t = ray.tmin; t <= ray.tmax && opacity < 1.0f; t += sampleStep, samplePos += increment) {
+        float intensity = m_pVolume->getSampleInterpolate(samplePos);
+        float sampleOpacity = getTF2DOpacity(intensity, m_pGradientVolume->getGradientInterpolate(samplePos).magnitude);
+
+        updateRay2DOpacity(sampleOpacity, accumulatedOpacity, opacity);
+    }
+
+    if (m_config.volumeShading) {
+        accumulatedOpacity *= computePhongShading(
+            accumulatedOpacity,
+            m_pGradientVolume->getGradientInterpolate(samplePos),
+            m_pCamera->position(),
+            m_pCamera->position());
+    }
+    return glm::vec4(accumulatedOpacity, opacity);
 }
 
-// ======= TODO: IMPLEMENT ========
+void Renderer::updateRay2DOpacity(const float& sampleOpacity, glm::vec3& accumulatedOpacity, float& opacity) const
+{
+    // as per slide 82 in Lecture 06
+    accumulatedOpacity.r = accumulatedOpacity.r + (1.0f - opacity) * sampleOpacity * m_config.TF2DColor.r;
+    accumulatedOpacity.g = accumulatedOpacity.g + (1.0f - opacity) * sampleOpacity * m_config.TF2DColor.g;
+    accumulatedOpacity.b = accumulatedOpacity.b + (1.0f - opacity) * sampleOpacity * m_config.TF2DColor.b;
+    opacity = opacity + (1.0f - opacity) * sampleOpacity;
+}
+
+
 // This function should return an opacity value for the given intensity and gradient according to the 2D transfer function.
 // Calculate whether the values are within the radius/intensity triangle defined in the 2D transfer function widget.
 // If so: return a tent weighting as described in the assignment
@@ -332,7 +361,16 @@ glm::vec4 Renderer::traceRayTF2D(const Ray& ray, float sampleStep) const
 // The 2D transfer function settings can be accessed through m_config.TF2DIntensity and m_config.TF2DRadius.
 float Renderer::getTF2DOpacity(float intensity, float gradientMagnitude) const
 {
-    return 0.0f;
+    float opacity = 0.0f;
+    float gradientUpperBound = m_pGradientVolume->maxMagnitude() / m_config.TF2DRadius * std::abs(intensity - m_config.TF2DIntensity);
+
+    if (gradientMagnitude >= gradientUpperBound) {
+        float slope = m_config.TF2DColor.a / (m_config.TF2DRadius * m_pGradientVolume->maxMagnitude());
+        opacity = slope * gradientMagnitude + (m_config.TF2DIntensity - slope * m_pGradientVolume->maxMagnitude() / 2);
+        opacity = std::min(opacity, m_config.TF2DColor.a);
+    }
+
+    return opacity;
 }
 
 // This function computes if a ray intersects with the axis-aligned bounding box around the volume.

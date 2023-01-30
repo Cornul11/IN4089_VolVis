@@ -66,6 +66,8 @@ protected:
 
     std::vector<glm::vec4> m_frameBuffer;
     void updateRayOpacity(const glm::vec4& sampleOpacity, glm::vec3& accumulatedOpacity, float& opacity) const;
+    void updateRay2DOpacity(const float& sampleOpacity, glm::vec3& accumulatedOpacity, float& opacity) const;
+
 };
 
 }
