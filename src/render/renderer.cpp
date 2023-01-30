@@ -29,7 +29,6 @@ void Renderer::setConfig(const RenderConfig& config)
 {
     if (config.renderResolution != m_config.renderResolution)
         resizeImage(config.renderResolution);
-
     m_config = config;
 }
 
@@ -84,50 +83,70 @@ void Renderer::render()
         for (int y = std::begin(localRange.rows()); y != std::end(localRange.rows()); y++) {
             for (int x = std::begin(localRange.cols()); x != std::end(localRange.cols()); x++) {
 #endif
-                // Compute a ray for the current pixel.
-                const glm::vec2 pixelPos = glm::vec2(x, y) / glm::vec2(m_config.renderResolution);
-                Ray ray = m_pCamera->generateRay(pixelPos * 2.0f - 1.0f);
+            // Compute a ray for the current pixel.
+            const glm::vec2 pixelPos = glm::vec2(x, y) / glm::vec2(m_config.renderResolution);
+            Ray ray = m_pCamera->generateRay(pixelPos * 2.0f - 1.0f);
 
-                // Compute where the ray enters and exists the volume.
-                // If the ray misses the volume then we continue to the next pixel.
-                if (!intersectRayVolumeBounds(ray, bounds))
-                    continue;
+            // Compute where the ray enters and exists the volume.
+            // If the ray misses the volume then we continue to the next pixel.
+            if (!intersectRayVolumeBounds(ray, bounds))
+                continue;
 
-                // Get a color for the current pixel according to the current render mode.
-                glm::vec4 color {};
-                switch (m_config.renderMode) {
-                case RenderMode::RenderSlicer: {
-                    color = traceRaySlice(ray, volumeCenter, planeNormal);
-                    break;
-                }
-                case RenderMode::RenderMIP: {
-                    color = traceRayMIP(ray, sampleStep);
-                    break;
-                }
-                case RenderMode::RenderComposite: {
-                    color = traceRayComposite(ray, sampleStep);
-                    break;
-                }
-                case RenderMode::RenderIso: {
-                    color = traceRayISO(ray, sampleStep);
-                    break;
-                }
-                case RenderMode::RenderTF2D: {
-                    color = traceRayTF2D(ray, sampleStep);
-                    break;
-                }
-                }
-                // Write the resulting color to the screen.
-                fillColor(x, y, color);
+            // Get a color for the current pixel according to the current render mode.
+            glm::vec4 color {};
+            switch (m_config.renderMode) {
+            case RenderMode::RenderSlicer: {
+                color = traceRaySlice(ray, volumeCenter, planeNormal);
+                break;
+            }
+            case RenderMode::RenderMIP: {
+                m_config.shadingMode = ShadingMode::Phong;
+                color = traceRayMIP(ray, sampleStep);
+                break;
+            }
+            case RenderMode::RenderComposite: {
+                color = traceRayComposite(ray, sampleStep);
+                break;
+            }
+            case RenderMode::RenderIso: {
+                color = traceRayISO(ray, sampleStep);
+                break;
+            }
+            case RenderMode::RenderTF2D: {
+                color = traceRayTF2D(ray, sampleStep);
+                break;
+            }
+            }
+            // Write the resulting color to the screen.
+            fillColor(x, y, color);
 
 #if PARALLELISM == 1
+        }
+    }
+});
+#else
             }
         }
-    });
-#else
-    }
-        }
 #endif
+}
+
+// This function returns the color of given pixel based on the current shading mode
+glm::vec3 Renderer::computeShading(const glm::vec3& color, const volume::GradientVoxel& gradient, const glm::vec3& L, const glm::vec3& V, const glm::vec3& samplePos) const
+{
+
+    switch (m_config.shadingMode) {
+    case ShadingMode::Phong: {
+        return computePhongShading(color, gradient, L, V);
+    }
+    case ShadingMode::Technical: {
+        return computeTechnicalShading(gradient, L, V);
+    }
+    case ShadingMode::Normal:
+        return computeNormalShading(gradient, L, V, samplePos);
+    default: {
+        throw std::exception();
+    }
+    }
 }
 
 // ======= DO NOT MODIFY THIS FUNCTION ========
@@ -171,8 +190,11 @@ glm::vec4 Renderer::traceRayISO(const Ray& ray, float sampleStep) const
 {
     static constexpr glm::vec3 isoColor { 0.8f, 0.8f, 0.2f };
     static constexpr glm::vec3 noIntersectionColor { 0.0f, 0.0f, 0.0f };
+    static constexpr glm::vec3 backgroundColor { 1.0f, 1.0f, 1.0f };
 
     glm::vec3 finalPixelColor = noIntersectionColor;
+    if (m_config.shadingMode == ShadingMode::Normal)
+        finalPixelColor = backgroundColor;
 
     float lastIterationT = std::numeric_limits<float>::lowest();
     float isoValue = m_config.isoValue;
@@ -187,10 +209,10 @@ glm::vec4 Renderer::traceRayISO(const Ray& ray, float sampleStep) const
             float accurateT = bisectionAccuracy(ray, lastIterationT, t, isoValue);
 
             if (m_config.volumeShading) {
-                finalPixelColor = computePhongShading(isoColor,
+                finalPixelColor = computeShading(isoColor,
                     m_pGradientVolume->getGradientInterpolate(ray.origin + accurateT * ray.direction),
                     m_pCamera->position(),
-                    m_pCamera->position());
+                    m_pCamera->position(), samplePos);
             } else {
                 finalPixelColor = isoColor;
             }
@@ -243,7 +265,7 @@ float Renderer::bisectionAccuracy(const Ray& ray, float t0, float t1, float isoV
 //
 // Use the given color for the ambient/specular/diffuse (you are allowed to scale these constants by a scalar value).
 // You are free to choose any specular power that you'd like.
-glm::vec3 Renderer::computePhongShading(const glm::vec3& color, const volume::GradientVoxel& gradient, const glm::vec3& L, const glm::vec3& V)
+glm::vec3 Renderer::computePhongShading(const glm::vec3& color, const volume::GradientVoxel& gradient, const glm::vec3& L, const glm::vec3& V) const
 {
     static constexpr float kA = 0.1f;
     static constexpr float kD = 0.7f;
@@ -267,6 +289,36 @@ glm::vec3 Renderer::computePhongShading(const glm::vec3& color, const volume::Gr
     return ambient + diffuse + specular;
 }
 
+glm::vec3 Renderer::computeTechnicalShading(const volume::GradientVoxel& gradient, const glm::vec3& L, const glm::vec3& V) const
+{
+    float beta = m_config.beta;
+    float alpha = m_config.alpha;
+    float b = m_config.b;
+    float y = m_config.y;
+    glm::vec3 kBlue = glm::vec3(0, 0, b);
+    glm::vec3 kYellow = glm::vec3(y, y, 0);
+    float diffuse = glm::dot(glm::normalize(gradient.dir), glm::normalize(L));
+    diffuse = (diffuse * 0.5f + 0.5f) * 1.0f;
+    float kD = 1.0f;
+    glm::vec3 kCool = kBlue + alpha * kD;
+    glm::vec3 kWarm = kYellow + beta * kD;
+    glm::vec3 diff = glm::vec3(1.0f) * (diffuse * kWarm + (1 - diffuse) * kCool);
+    glm::vec3 specular = glm::vec3(1.0f) * glm::pow(glm::max(0.0f, glm::dot(glm::normalize(gradient.dir), glm::normalize(L + V))), alpha);
+    glm::vec3 finalColor = diff + specular;
+    return finalColor;
+}
+
+glm::vec3 Renderer::computeNormalShading(const volume::GradientVoxel& gradient, const glm::vec3& L, const glm::vec3& V, const glm::vec3& samplePos) const
+{
+    float near = 0.1;
+    float far = 100.0;
+
+    float z = samplePos.z * 2.0 - 1.0;
+    float linearizedDepth = (2.0 * near * far) / (far + near - z * (far - near));
+    glm::vec3 depth = glm::vec3(linearizedDepth / far);
+    return depth;
+}
+
 // In this function, implement 1D transfer function raycasting.
 // Use getTFValue to compute the color for a given volume value according to the 1D transfer function.
 glm::vec4 Renderer::traceRayComposite(const Ray& ray, float sampleStep) const
@@ -285,11 +337,12 @@ glm::vec4 Renderer::traceRayComposite(const Ray& ray, float sampleStep) const
     }
 
     if (m_config.volumeShading) {
-        accumulatedOpacity *= computePhongShading(
+        accumulatedOpacity *= computeShading(
             accumulatedOpacity,
             m_pGradientVolume->getGradientInterpolate(samplePos),
             m_pCamera->position(),
-            m_pCamera->position());
+            m_pCamera->position(),
+            samplePos);
     }
     return glm::vec4(accumulatedOpacity, opacity);
 }
@@ -334,11 +387,12 @@ glm::vec4 Renderer::traceRayTF2D(const Ray& ray, float sampleStep) const
     }
 
     if (m_config.volumeShading) {
-        accumulatedOpacity *= computePhongShading(
+        accumulatedOpacity *= computeShading(
             accumulatedOpacity,
             m_pGradientVolume->getGradientInterpolate(samplePos),
             m_pCamera->position(),
-            m_pCamera->position());
+            m_pCamera->position(),
+            samplePos);
     }
     return glm::vec4(accumulatedOpacity, opacity);
 }
@@ -351,7 +405,6 @@ void Renderer::updateRay2DOpacity(const float& sampleOpacity, glm::vec3& accumul
     accumulatedOpacity.b = accumulatedOpacity.b + (1.0f - opacity) * sampleOpacity * m_config.TF2DColor.b;
     opacity = opacity + (1.0f - opacity) * sampleOpacity;
 }
-
 
 // This function should return an opacity value for the given intensity and gradient according to the 2D transfer function.
 // Calculate whether the values are within the radius/intensity triangle defined in the 2D transfer function widget.

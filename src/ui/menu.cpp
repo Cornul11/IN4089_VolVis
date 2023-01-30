@@ -1,5 +1,4 @@
 #include "menu.h"
-#include "render/renderer.h"
 #include <filesystem>
 #include <fmt/format.h>
 #include <imgui.h>
@@ -148,11 +147,26 @@ void Menu::showRayCastTab(std::chrono::duration<double> renderTime)
 
         ImGui::NewLine();
 
+        ImGui::SliderFloat("Yellow component", &m_renderConfig.y, 0.0f, 1.0f);
+        ImGui::SliderFloat("Blue component", &m_renderConfig.b, 0.0f, 1.0f);
+        ImGui::SliderFloat("Alpha component", &m_renderConfig.alpha, 0.0f, 1.0f);
+        ImGui::SliderFloat("Beta component", &m_renderConfig.beta, 0.0f, 1.0f);
+        ImGui::SliderFloat("Alpha exponent", &m_renderConfig.spec_alpha, 0.0f, 400.0f);
+
+        ImGui::NewLine();
+
+        int* pShadingModeInt = reinterpret_cast<int*>(&m_renderConfig.shadingMode);
+        ImGui::Text("Shading:");
+        ImGui::RadioButton("Phong", pShadingModeInt, int(render::ShadingMode::Phong));
+        ImGui::RadioButton("Technical", pShadingModeInt, int(render::ShadingMode::Technical));
+        ImGui::RadioButton("Normal", pShadingModeInt, int(render::ShadingMode::Normal));
+        ImGui::NewLine();
+
         int* pInterpolationModeInt = reinterpret_cast<int*>(&m_interpolationMode);
         ImGui::Text("Interpolation:");
         ImGui::RadioButton("Nearest Neighbour", pInterpolationModeInt, int(volume::InterpolationMode::NearestNeighbour));
         ImGui::RadioButton("Linear", pInterpolationModeInt, int(volume::InterpolationMode::Linear));
-        ImGui::RadioButton("TriCubic", pInterpolationModeInt, int(volume::InterpolationMode::Cubic));
+//        ImGui::RadioButton("TriCubic", pInterpolationModeInt, int(volume::InterpolationMode::Cubic));
 
         ImGui::EndTabItem();
     }
@@ -189,5 +203,4 @@ void Menu::callInterpolationModeChangedCallback() const
     if (m_optInterpolationModeChangedCallback)
         (*m_optInterpolationModeChangedCallback)(m_interpolationMode);
 }
-
 }

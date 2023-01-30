@@ -46,7 +46,9 @@ protected:
 
     float bisectionAccuracy(const Ray& ray, float t0, float t1, float isoValue) const;
 
-    static glm::vec3 computePhongShading(const glm::vec3& color, const volume::GradientVoxel& gradient, const glm::vec3& lightDirection, const glm::vec3& viewDirection);
+    glm::vec3 computePhongShading(const glm::vec3& color, const volume::GradientVoxel& gradient, const glm::vec3& lightDirection, const glm::vec3& viewDirection) const;
+    glm::vec3 computeTechnicalShading(const volume::GradientVoxel& gradient, const glm::vec3& lightDirection, const glm::vec3& viewDirection) const;
+
 
 private:
     void resizeImage(const glm::ivec2& resolution);
@@ -68,6 +70,8 @@ protected:
     void updateRayOpacity(const glm::vec4& sampleOpacity, glm::vec3& accumulatedOpacity, float& opacity) const;
     void updateRay2DOpacity(const float& sampleOpacity, glm::vec3& accumulatedOpacity, float& opacity) const;
 
+    glm::vec3 computeShading(const glm::vec3& color, const volume::GradientVoxel& gradient, const glm::vec3& L, const glm::vec3& V, const glm::vec3& samplePos) const;
+    glm::vec3 computeNormalShading(const volume::GradientVoxel& gradient, const glm::vec3& L, const glm::vec3& V, const glm::vec3& samplePos) const;
 };
 
 }

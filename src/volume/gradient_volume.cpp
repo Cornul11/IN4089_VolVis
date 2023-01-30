@@ -142,6 +142,8 @@ GradientVoxel GradientVolume::linearInterpolate(const GradientVoxel& g0, const G
 GradientVoxel GradientVolume::getGradient(int x, int y, int z) const
 {
     const size_t i = static_cast<size_t>(x + m_dim.x * (y + m_dim.y * z));
+    if (i > m_data.size() - 1) // avoiding going out of bounds
+        return GradientVoxel{glm::vec3(0, 0, 0), 0};
     return m_data[i];
 }
 }
