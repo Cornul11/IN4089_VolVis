@@ -159,7 +159,6 @@ void Menu::showRayCastTab(std::chrono::duration<double> renderTime)
         ImGui::Text("Shading:");
         ImGui::RadioButton("Phong", pShadingModeInt, int(render::ShadingMode::Phong));
         ImGui::RadioButton("Technical", pShadingModeInt, int(render::ShadingMode::Technical));
-        ImGui::RadioButton("Normal", pShadingModeInt, int(render::ShadingMode::Normal));
         ImGui::NewLine();
 
         int* pInterpolationModeInt = reinterpret_cast<int*>(&m_interpolationMode);

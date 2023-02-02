@@ -300,30 +300,23 @@ glm::vec3 Renderer::computeTechnicalShading(const volume::GradientVoxel& gradien
     const glm::vec3 kYellow(y, y, 0);
     const float kD = 1.0f;
 
-    const float diffuse = glm::dot(glm::normalize(gradient.dir), glm::normalize(L));
+    const glm::vec3 Nn = glm::normalize(gradient.dir);
+    const glm::vec3 Ln = glm::normalize(L);
+    const glm::vec3 LVn = glm::normalize(L + V);
+
+    const float diffuse = glm::dot(Nn, Ln);
     const float diffuseFactor = (diffuse * 0.5f + 0.5f) * 1.0f;
 
     const glm::vec3 kCool = kBlue + alpha * kD;
     const glm::vec3 kWarm = kYellow + beta * kD;
     const glm::vec3 diff = glm::vec3(1.0f) * (diffuseFactor * kWarm + (1 - diffuseFactor) * kCool);
 
-    const float specularFactor = glm::pow(glm::max(0.0f, glm::dot(glm::normalize(gradient.dir), glm::normalize(L + V))), alpha);
+    const float specularFactor = glm::pow(glm::max(0.0f, glm::dot(Nn, LVn)), alpha);
     const glm::vec3 specular = glm::vec3(1.0f) * specularFactor;
 
     const glm::vec3 finalColor = diff + specular;
 
     return finalColor;
-}
-
-glm::vec3 Renderer::computeNormalShading(const volume::GradientVoxel& gradient, const glm::vec3& L, const glm::vec3& V, const glm::vec3& samplePos) const
-{
-    float near = 0.1;
-    float far = 100.0;
-
-    float z = samplePos.z * 2.0 - 1.0;
-    float linearizedDepth = (2.0 * near * far) / (far + near - z * (far - near));
-    glm::vec3 depth = glm::vec3(linearizedDepth / far);
-    return depth;
 }
 
 // In this function, implement 1D transfer function raycasting.

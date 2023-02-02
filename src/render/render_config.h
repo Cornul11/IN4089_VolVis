@@ -17,7 +17,6 @@ enum class RenderMode {
 enum class ShadingMode {
     Phong = 0,
     Technical,
-    Normal
 };
 
 struct RenderConfig {
