@@ -191,8 +191,6 @@ glm::vec4 Renderer::traceRayISO(const Ray& ray, float sampleStep) const
     static constexpr glm::vec3 backgroundColor { 1.0f, 1.0f, 1.0f };
 
     glm::vec3 finalPixelColor = noIntersectionColor;
-    if (m_config.shadingMode == ShadingMode::Normal)
-        finalPixelColor = backgroundColor;
 
     float lastIterationT = std::numeric_limits<float>::lowest();
     float isoValue = m_config.isoValue;
